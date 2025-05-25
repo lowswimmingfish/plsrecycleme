@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from PIL import Image
 import pytesseract
-import cv2
 import numpy as np
 import openai
 import io
@@ -77,20 +76,12 @@ if uploaded_files:
         image = Image.open(file)
         st.image(image, caption="업로드한 이미지", use_container_width=True)
 
-        # ✅ 이미지 전처리
-        img = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
-        img = cv2.medianBlur(img, 3)
-        scale_percent = 150
-        width = int(img.shape[1] * scale_percent / 100)
-        height = int(img.shape[0] * scale_percent / 100)
-        img = cv2.resize(img, (width, height), interpolation=cv2.INTER_LINEAR)
-        thresh = cv2.adaptiveThreshold(
-            img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY, 11, 2
-        )
+        # ✅ 이미지 전처리 (Pillow 기반으로만 처리)
+        img = image.convert("L")  # 흑백 변환
+        img = img.resize((img.width * 2, img.height * 2))  # 확대
 
         # ✅ OCR 수행
-        text = pytesseract.image_to_string(thresh, lang="kor+eng")
+        text = pytesseract.image_to_string(img, lang="kor+eng")
         ocr_input = st.text_area("📜 OCR 결과 (수정 가능)", text, height=200, key=file.name)
 
         # ✅ GPT 재요청 버튼
