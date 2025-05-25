@@ -1,13 +1,13 @@
 import streamlit as st
 import pandas as pd
 from PIL import Image
-import pytesseract
 import numpy as np
 import openai
 import io
 import matplotlib.pyplot as plt
 from datetime import datetime
 import matplotlib
+import os
 
 # ✅ 한글 폰트 설정
 matplotlib.rcParams['font.family'] = 'AppleGothic'
@@ -15,6 +15,12 @@ matplotlib.rcParams['axes.unicode_minus'] = False
 
 # ✅ OpenAI API 키 불러오기
 openai.api_key = st.secrets["openai"]["api_key"]
+
+# ✅ 환경 분기
+is_cloud = os.environ.get("STREAMLIT_CLOUD", "false").lower() == "true"
+
+if not is_cloud:
+    import pytesseract
 
 # ✅ GPT 프롬프트 (간편장부 기준)
 def ask_gpt_for_journal_entries(ocr_text):
@@ -76,25 +82,24 @@ if uploaded_files:
         image = Image.open(file)
         st.image(image, caption="업로드한 이미지", use_container_width=True)
 
-        # ✅ 이미지 전처리 (Pillow 기반으로만 처리)
-        img = image.convert("L")  # 흑백 변환
-        img = img.resize((img.width * 2, img.height * 2))  # 확대
-
-        # ✅ OCR 수행
-        text = pytesseract.image_to_string(img, lang="kor+eng")
-        ocr_input = st.text_area("📜 OCR 결과 (수정 가능)", text, height=200, key=file.name)
+        if is_cloud:
+            text = st.text_area("✏️ Cloud 환경에서는 OCR 미지원. 텍스트를 직접 입력하세요", "", height=200, key=file.name)
+        else:
+            img = image.convert("L")  # 흑백 변환
+            img = img.resize((img.width * 2, img.height * 2))  # 확대
+            text = pytesseract.image_to_string(img, lang="kor+eng")
+            text = st.text_area("📜 OCR 결과 (수정 가능)", text, height=200, key=file.name)
 
         # ✅ GPT 재요청 버튼
         if st.button(f"🤖 GPT 재요청 ({file.name})"):
-            gpt_result = ask_gpt_for_journal_entries(ocr_input)
+            gpt_result = ask_gpt_for_journal_entries(text)
             st.session_state[f"gpt_result_{file.name}"] = gpt_result
 
-        gpt_result = st.session_state.get(f"gpt_result_{file.name}", ask_gpt_for_journal_entries(ocr_input))
+        gpt_result = st.session_state.get(f"gpt_result_{file.name}", ask_gpt_for_journal_entries(text))
 
         st.subheader("🤖 GPT 자동분개 결과")
         st.text_area("GPT 응답", gpt_result, height=300, key=f"gpt_out_{file.name}")
 
-        # ✅ GPT 응답 → 표 변환
         df = parse_markdown_table(gpt_result)
         if not df.empty:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -102,7 +107,6 @@ if uploaded_files:
             st.subheader("📊 자동분개 표 (수정 가능)")
             edited_df = st.data_editor(df, num_rows="dynamic", key=f"editor_{file.name}")
 
-            # ✅ CSV 다운로드
             csv = edited_df.to_csv(index=False).encode("utf-8-sig")
             st.download_button(
                 label="💾 CSV로 저장하기",
@@ -119,7 +123,6 @@ if all_dataframes:
         df_concat["금액"] = df_concat["금액"].astype(str).str.replace(",", "").str.replace("원", "").str.strip()
         df_concat["금액"] = pd.to_numeric(df_concat["금액"], errors="coerce")
 
-        # 유연한 열 이름 인식
         debit_col = None
         for col in df_concat.columns:
             if "차변" in col and "대변" in col:
