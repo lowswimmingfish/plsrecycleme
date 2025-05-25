@@ -13,11 +13,14 @@ import os
 matplotlib.rcParams['font.family'] = 'AppleGothic'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
-# ✅ OpenAI API 키 불러오기
-openai.api_key = st.secrets["openai"]["api_key"]
-
 # ✅ 환경 분기
 is_cloud = os.environ.get("STREAMLIT_CLOUD", "false").lower() == "true"
+
+# ✅ OpenAI API 키 불러오기
+if "openai" in st.secrets and "api_key" in st.secrets["openai"]:
+    openai.api_key = st.secrets["openai"]["api_key"]
+else:
+    st.stop()
 
 if not is_cloud:
     import pytesseract
@@ -85,12 +88,11 @@ if uploaded_files:
         if is_cloud:
             text = st.text_area("✏️ Cloud 환경에서는 OCR 미지원. 텍스트를 직접 입력하세요", "", height=200, key=file.name)
         else:
-            img = image.convert("L")  # 흑백 변환
-            img = img.resize((img.width * 2, img.height * 2))  # 확대
+            img = image.convert("L")
+            img = img.resize((img.width * 2, img.height * 2))
             text = pytesseract.image_to_string(img, lang="kor+eng")
             text = st.text_area("📜 OCR 결과 (수정 가능)", text, height=200, key=file.name)
 
-        # ✅ GPT 재요청 버튼
         if st.button(f"🤖 GPT 재요청 ({file.name})"):
             gpt_result = ask_gpt_for_journal_entries(text)
             st.session_state[f"gpt_result_{file.name}"] = gpt_result
