@@ -6,4 +6,5 @@ numpy
 pandas
 matplotlib
 openai
+python_version == 3.10
 
